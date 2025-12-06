@@ -1,2 +1,2 @@
-# NMAAPI
-Naji Mini Apps API
+# NMASDK
+Naji Mini Apps SDK
