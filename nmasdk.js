@@ -1,5 +1,5 @@
 /**
- * Naji Mini Apps SDK v3.0
+ * Naji Mini Apps SDK v3.0 (Fixed)
  */
 class NajiSDK {
     constructor() {
@@ -50,7 +50,6 @@ class NajiSDK {
 
     _postMessage(type, payload = {}) {
         if (window.parent) window.parent.postMessage({ type, payload }, '*');
-        else console.warn('[NajiSDK] Parent window not found.');
     }
 
     _request(type, payload = {}) {
@@ -58,7 +57,6 @@ class NajiSDK {
             const reqId = Date.now().toString(36) + Math.random().toString(36).substr(2);
             this.pendingRequests[reqId] = { resolve, reject };
             this._postMessage(type, { ...payload, reqId });
-            // Таймаут 30 секунд
             setTimeout(() => {
                 if (this.pendingRequests[reqId]) {
                     delete this.pendingRequests[reqId];
@@ -73,15 +71,17 @@ class NajiSDK {
         else this.initCallbacks.push(callback);
     }
 
-    // === Данные пользователя ===
+    // === User & Environment ===
     getNickname() { return this.user?.username; }
     getName() { return this.user?.first_name; }
     getSurname() { return this.user?.last_name; }
-    getFullName() { return this.user ? `${this.user.first_name || ''} ${this.user.last_name || ''}`.trim() : 'Guest'; }
+    getFullName() { return this.user ? `${this.user.first_name || ''} ${this.user.last_name || ''}`.trim() : null; }
     getUserAvatar() { return this.user?.avatar; }
+    
+    // ВОТ ФУНКЦИЯ, КОТОРУЮ НЕ ВИДИТ БРАУЗЕР:
     getColorScheme() { return this.theme; }
 
-    // === UI и Навигация ===
+    // === UI & Navigation ===
     openLink(url) { this._postMessage('OPEN_LINK', { url }); }
     openNMLink(path) { this._postMessage('OPEN_NM_LINK', { path }); }
     showAlert(message) { this._postMessage('SHOW_ALERT', { message }); }
@@ -90,7 +90,7 @@ class NajiSDK {
     setFullscreen() { this._postMessage('SET_FULLSCREEN_APP', { value: true }); }
     exitFullscreen() { this._postMessage('SET_FULLSCREEN_APP', { value: false }); }
 
-    // === Кнопка Назад ===
+    // === Back Button ===
     backButton = {
         show: () => this._postMessage('BACK_BUTTON_UPDATE', { visible: true }),
         hide: () => this._postMessage('BACK_BUTTON_UPDATE', { visible: false }),
@@ -100,24 +100,27 @@ class NajiSDK {
         }
     };
 
-    // === Шеринг ===
+    // === Sharing ===
     shareMessage(text) { this._postMessage('SHARE_MESSAGE', { text }); }
+    
+    // ВОТ ВТОРАЯ ФУНКЦИЯ, КОТОРУЮ НЕ ВИДНО:
     onMessageShared(callback) { this.eventListeners['messageShared'].push(callback); }
 
-    // === Облачное хранилище ===
+    // === Storage ===
     async setItem(key, value) { return this._request('STORAGE_SET', { key, value }); }
     async getItem(key) { return this._request('STORAGE_GET', { key }); }
     async changeItem(key, value) { return this.setItem(key, value); }
     async deleteItem(key) { return this._request('STORAGE_DELETE', { key }); }
 
-    // === Платежи и Solana ===
+    // === Payments & Solana ===
     async createInvoice(title, amount) { return this._request('CREATE_INVOICE_SPARKS', { title, amount }); }
-    async getSolanaAddress() { return this._request('GET_SOLANA_ADDRESS'); }
+    async getSolAddr() { return this._request('GET_SOLANA_ADDRESS'); }
+    async getSolanaAddress() { return this.getSolAddr(); }
     async createSolanaInvoice(recipientAddr, lamports) {
         return this._request('SOLANA_TRANSFER', { recipient: recipientAddr, amount: lamports });
     }
     
-    // === Разное ===
+    // === Utils ===
     downloadFile(url, filename) { this._postMessage('DOWNLOAD_FILE', { url, filename }); }
     async isActive() { return this._request('CHECK_IS_ACTIVE'); }
 }
