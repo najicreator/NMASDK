@@ -1,102 +1,128 @@
-(function () {
-    const nmaapi = {
-        sendTransaction: async function(amount, network, address, token = null) {
-            if (!window.nmaapi) {
-                throw new Error('API кошелька не загружен. Убедитесь, что nmaapi.js включён.');
+class NajiSDK {
+    constructor() {
+        this.user = null;
+        this.initialized = false;
+        this.initCallbacks = [];
+        
+        // Слушаем сообщения от родительского окна (Najime App)
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            
+            // Обработка инициализации
+            if (data.type === 'NAJI_INIT_DATA') {
+                this.user = data.user;
+                this.initialized = true;
+                this.initCallbacks.forEach(cb => cb());
             }
-            if (!isNmaapiReady) {
-                throw new Error('API кошелька не инициализирован. Ожидайте NMAAPI_READY от родительской страницы.');
-            }
-            return await sendTransactionRequest(amount, network, address, token);
-        },
-        sendNSTransaction: async function(amount, icon, name, botKey) {
-            if (!window.nmaapi) {
-                throw new Error('API кошелька не загружен. Убедитесь, что nmaapi.js включён.');
-            }
-            if (!isNmaapiReady) {
-                throw new Error('API кошелька не инициализирован. Ожидайте NMAAPI_READY от родительской страницы.');
-            }
-            return await sendNSTransactionRequest(amount, icon, name, botKey);
-        }
-    };
-    window.nmaapi = nmaapi;
-    console.log('Дочерний контекст: nmaapi определён', !!window.nmaapi);
-
-    let isNmaapiReady = false;
-    window.addEventListener('message', (event) => {
-        if (event.data.type === 'NMAAPI_READY') {
-            isNmaapiReady = true;
-            console.log('Дитя: Получен NMAAPI_READY, nmaapi доступен:', !!window.nmaapi);
-        }
-    });
-
-    // Периодически проверяем готовность
-    const checkNmaapi = setInterval(() => {
-        if (isNmaapiReady) {
-            console.log('Дитя: nmaapi готов через проверку интервалом');
-            clearInterval(checkNmaapi);
-        }
-    }, 500);
-    setTimeout(() => {
-        if (!isNmaapiReady) {
-            console.error('Дитя: NMAAPI_READY не получен после 30 секунд. Проверьте, загружена ли родительская страница.');
-            clearInterval(checkNmaapi);
-        }
-    }, 30000);
-
-    function sendTransactionRequest(amount, network, address, token) {
-        return new Promise((resolve, reject) => {
-            if (!window.parent) {
-                reject(new Error('Родительское окно недоступно'));
-                return;
-            }
-
-            console.log('Дитя: Отправка TRANSACTION_REQUEST:', { amount, network, address, token });
-            window.parent.postMessage({
-                type: 'TRANSACTION_REQUEST',
-                payload: { amount, network, address, token }
-            }, '*');
-
-            window.addEventListener('message', function handler(event) {
-                if (event.data.type === 'TRANSACTION_RESPONSE') {
-                    console.log('Дитя: Получен TRANSACTION_RESPONSE:', event.data.payload);
-                    const { success, transactionId, error } = event.data.payload;
-                    if (success) {
-                        resolve(transactionId);
-                    } else {
-                        reject(new Error(error));
-                    }
-                    window.removeEventListener('message', handler);
-                }
-            });
         });
+
+        // Сообщаем родителю, что SDK загружен и ждет данных
+        this._postMessage('NAJI_SDK_INIT');
     }
 
-    function sendNSTransactionRequest(amount, icon, name, botKey) {
-        return new Promise((resolve, reject) => {
-            if (!window.parent) {
-                reject(new Error('Родительское окно недоступно'));
-                return;
-            }
-
-            console.log('Дитя: Отправка NS_TRANSACTION_REQUEST:', { amount, icon, name, botKey });
-            window.parent.postMessage({
-                type: 'NS_TRANSACTION_REQUEST',
-                payload: { amount, icon, name, botKey }
-            }, '*');
-
-            window.addEventListener('message', function handler(event) {
-                if (event.data.type === 'NS_TRANSACTION_RESPONSE') {
-                    console.log('Дитя: Получен NS_TRANSACTION_RESPONSE:', event.data.payload);
-                    const { success, transactionId, error } = event.data.payload;
-                    if (success) {
-                        resolve(transactionId);
-                    } else {
-                        reject(new Error(error));
-                    }
-                    window.removeEventListener('message', handler);
-                }
-            });
-        });
+    /**
+     * Внутренний метод отправки сообщений родителю
+     */
+    _postMessage(type, payload = {}) {
+        if (window.parent) {
+            window.parent.postMessage({ type, payload }, '*');
+        } else {
+            console.warn('NajiSDK: Parent window not found. Are you running inside Najime?');
+        }
     }
-})();
+
+    /**
+     * Ожидание инициализации SDK
+     * @param {Function} callback 
+     */
+    onInit(callback) {
+        if (this.initialized) {
+            callback();
+        } else {
+            this.initCallbacks.push(callback);
+        }
+    }
+
+    // === User Info Getters ===
+
+    getNickname() {
+        return this.user ? this.user.username : null;
+    }
+
+    getName() {
+        return this.user ? this.user.first_name : null;
+    }
+
+    getSurname() {
+        return this.user ? this.user.last_name : null;
+    }
+
+    getFullName() {
+        if (!this.user) return null;
+        return `${this.user.first_name || ''} ${this.user.last_name || ''}`.trim();
+    }
+
+    getUserAvatar() {
+        return this.user ? this.user.avatar : null;
+    }
+
+    // === Navigation ===
+
+    openLink(url) {
+        this._postMessage('OPEN_LINK', { url });
+    }
+
+    openNMLink(path) {
+        // Для внутренних ссылок, например "settings" или "chat/username"
+        this._postMessage('OPEN_NM_LINK', { path });
+    }
+
+    // === UI Interactions ===
+
+    showAlert(message) {
+        this._postMessage('SHOW_ALERT', { message });
+    }
+
+    /**
+     * Сообщает приложению, что Mini App полностью загрузился (убирает лоадер, если есть)
+     */
+    isReady() {
+        this._postMessage('APP_READY');
+    }
+
+    /**
+     * Меняет цвет шапки модального окна
+     * @param {string} color - HEX code (e.g. '#ff0000') or CSS color
+     */
+    setHeaderColor(color) {
+        this._postMessage('SET_HEADER_COLOR', { color });
+    }
+
+    /**
+     * Разворачивает Mini App на весь экран (скрывает шапку или растягивает модалку)
+     */
+    setFullscreen() {
+        this._postMessage('SET_FULLSCREEN', { value: true });
+    }
+
+    /**
+     * Возвращает Mini App в стандартный режим
+     */
+    exitFullscreen() {
+        this._postMessage('SET_FULLSCREEN', { value: false });
+    }
+
+    // === Utilities ===
+
+    /**
+     * Скачивает файл. Запрос передается в основное приложение для обхода CORS/Sandbox.
+     * @param {string} url 
+     * @param {string} [filename] 
+     */
+    downloadFile(url, filename) {
+        this._postMessage('DOWNLOAD_FILE', { url, filename });
+    }
+}
+
+// Экспортируем глобальный инстанс
+window.NMA = new NajiSDK();
