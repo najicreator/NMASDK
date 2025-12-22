@@ -1,6 +1,3 @@
-/**
- * Naji Mini Apps SDK v3.0 (Fixed)
- */
 class NajiSDK {
     constructor() {
         this.user = null;
@@ -17,7 +14,6 @@ class NajiSDK {
             const data = event.data;
             if (!data || typeof data !== 'object') return;
 
-            // 1. Инициализация
             if (data.type === 'NAJI_INIT_DATA') {
                 this.user = data.user;
                 this.theme = data.theme || 'light';
@@ -25,7 +21,6 @@ class NajiSDK {
                 this.initCallbacks.forEach(cb => cb());
             }
 
-            // 2. Ответы на асинхронные запросы
             if (data.type === 'NAJI_ASYNC_RESPONSE') {
                 const { reqId, result, error } = data;
                 if (this.pendingRequests[reqId]) {
@@ -35,7 +30,6 @@ class NajiSDK {
                 }
             }
 
-            // 3. События от хоста
             if (data.type === 'NAJI_EVENT') {
                 const { eventName, payload } = data;
                 if (this.eventListeners[eventName]) {
@@ -44,7 +38,7 @@ class NajiSDK {
             }
         });
 
-        // Сообщаем, что мы загрузились
+        // Handshake
         this._postMessage('NAJI_SDK_INIT');
     }
 
@@ -62,7 +56,7 @@ class NajiSDK {
                     delete this.pendingRequests[reqId];
                     reject('Request timeout');
                 }
-            }, 30000);
+            }, 60000);
         });
     }
 
@@ -71,25 +65,13 @@ class NajiSDK {
         else this.initCallbacks.push(callback);
     }
 
-    // === User & Environment ===
+    // === User & UI ===
     getNickname() { return this.user?.username; }
-    getName() { return this.user?.first_name; }
-    getSurname() { return this.user?.last_name; }
-    getFullName() { return this.user ? `${this.user.first_name || ''} ${this.user.last_name || ''}`.trim() : null; }
-    getUserAvatar() { return this.user?.avatar; }
-    
-    // ВОТ ФУНКЦИЯ, КОТОРУЮ НЕ ВИДИТ БРАУЗЕР:
     getColorScheme() { return this.theme; }
-
-    // === UI & Navigation ===
     openLink(url) { this._postMessage('OPEN_LINK', { url }); }
-    openNMLink(path) { this._postMessage('OPEN_NM_LINK', { path }); }
     showAlert(message) { this._postMessage('SHOW_ALERT', { message }); }
     isReady() { this._postMessage('APP_READY'); }
-    setHeaderColor(color) { this._postMessage('SET_HEADER_COLOR', { color }); }
-    setFullscreen() { this._postMessage('SET_FULLSCREEN_APP', { value: true }); }
-    exitFullscreen() { this._postMessage('SET_FULLSCREEN_APP', { value: false }); }
-
+    
     // === Back Button ===
     backButton = {
         show: () => this._postMessage('BACK_BUTTON_UPDATE', { visible: true }),
@@ -100,29 +82,26 @@ class NajiSDK {
         }
     };
 
-    // === Sharing ===
-    shareMessage(text) { this._postMessage('SHARE_MESSAGE', { text }); }
-    
-    // ВОТ ВТОРАЯ ФУНКЦИЯ, КОТОРУЮ НЕ ВИДНО:
-    onMessageShared(callback) { this.eventListeners['messageShared'].push(callback); }
-
-    // === Storage ===
     async setItem(key, value) { return this._request('STORAGE_SET', { key, value }); }
     async getItem(key) { return this._request('STORAGE_GET', { key }); }
-    async changeItem(key, value) { return this.setItem(key, value); }
-    async deleteItem(key) { return this._request('STORAGE_DELETE', { key }); }
 
-    // === Payments & Solana ===
     async createInvoice(title, amount) { return this._request('CREATE_INVOICE_SPARKS', { title, amount }); }
-    async getSolAddr() { return this._request('GET_SOLANA_ADDRESS'); }
-    async getSolanaAddress() { return this.getSolAddr(); }
-    async createSolanaInvoice(recipientAddr, lamports) {
-        return this._request('SOLANA_TRANSFER', { recipient: recipientAddr, amount: lamports });
+
+    async getSolanaAddress() { 
+        return this._request('GET_SOLANA_ADDRESS'); 
     }
-    
-    // === Utils ===
-    downloadFile(url, filename) { this._postMessage('DOWNLOAD_FILE', { url, filename }); }
-    async isActive() { return this._request('CHECK_IS_ACTIVE'); }
+
+    async requestPayment(recipientAddr, amount, tokenMint = 'SOL') {
+        return this._request('SOLANA_PAYMENT_REQUEST', { 
+            recipient: recipientAddr, 
+            amount: amount,
+            tokenMint: tokenMint 
+        });
+    }
+
+    async mintNFT(name, symbol, uri) {
+        return this._request('SOLANA_MINT_NFT', { name, symbol, uri });
+    }
 }
 
 window.NajiApp = new NajiSDK();
