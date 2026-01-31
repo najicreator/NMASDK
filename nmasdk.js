@@ -211,15 +211,17 @@ class NajiSDK {
     }
 
     async createToken(config) {
-        const { name, symbol, decimals = 9, supply = 0, uri } = config;
+        const { decimals = 9, supply, uri } = config;
 
         if (!uri) {
             throw new Error('URI is required. Upload your metadata.json first.');
         }
 
+        if (!supply || supply <= 0) {
+            throw new Error('Supply must be greater than 0');
+        }
+
         return this._request('SOLANA_CREATE_TOKEN', { 
-            name,
-            symbol,
             decimals,
             supply,
             uri
@@ -227,15 +229,13 @@ class NajiSDK {
     }
 
     async createNFT(config) {
-        const { name, symbol, uri } = config;
+        const { uri } = config;
 
         if (!uri) {
             throw new Error('URI is required. Upload your metadata.json first.');
         }
 
         return this._request('SOLANA_MINT_NFT', { 
-            name,
-            symbol,
             uri
         });
     }
@@ -257,8 +257,8 @@ class NajiSDK {
         });
     }
 
-    async mintNFT(name, symbol, uri) {
-        return this._request('SOLANA_MINT_NFT', { name, symbol, uri });
+    async mintNFT(uri) {
+        return this._request('SOLANA_MINT_NFT', { uri });
     }
 
     hasPermission(permission) {
