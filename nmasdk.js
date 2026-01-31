@@ -10,16 +10,14 @@ class NajiSDK {
         this.pendingRequests = {};
         this.eventListeners = {
             'backButtonClicked': [],
-            'messageShared': [],
             'themeChanged': [],
             'permissionChanged': []
         };
 
         window.addEventListener('message', this._handleMessage.bind(this));
-
         this._postMessage('NAJI_SDK_INIT');
-        
-        console.log('🚀 Naji SDK v2.0 initialized');
+
+        console.log('🚀 Naji SDK v2.1 initialized');
     }
 
     _handleMessage(event) {
@@ -34,8 +32,10 @@ class NajiSDK {
                 this.permissions = data.permissions || {};
                 this.wallet = data.wallet || null;
                 this.initialized = true;
-                
-                console.log('✅ SDK initialized with user:', this.user);
+
+                console.log('✅ SDK initialized');
+                console.log('📱 Platform:', this.platform);
+                console.log('💼 Wallet:', this.wallet?.connected ? 'Connected' : 'Not connected');
 
                 this.initCallbacks.forEach(cb => {
                     try {
@@ -84,10 +84,9 @@ class NajiSDK {
         return new Promise((resolve, reject) => {
             const reqId = Date.now().toString(36) + Math.random().toString(36).substr(2);
             this.pendingRequests[reqId] = { resolve, reject };
-            
+
             this._postMessage(type, { ...payload, reqId });
-            
-            // Таймаут для запроса
+
             setTimeout(() => {
                 if (this.pendingRequests[reqId]) {
                     delete this.pendingRequests[reqId];
@@ -104,7 +103,7 @@ class NajiSDK {
             this.initCallbacks.push(callback);
         }
     }
-    
+
     isInitialized() {
         return this.initialized;
     }
@@ -158,7 +157,7 @@ class NajiSDK {
     showAlert(message, title = null, type = 'info') {
         this._postMessage('SHOW_ALERT', { message, title, type });
     }
-    
+
     async setItem(key, value) {
         return this._request('STORAGE_SET', { key, value });
     }
@@ -184,42 +183,82 @@ class NajiSDK {
     }
 
     async getSolanaBalance() {
-        return this._request('GET_SOLANA_BALANCE');
+        const result = await this._request('GET_SOLANA_BALANCE');
+        return result.balance;
     }
 
     async getTokenBalance(tokenMint) {
-        return this._request('GET_TOKEN_BALANCE', { tokenMint });
+        const result = await this._request('GET_TOKEN_BALANCE', { tokenMint });
+        return result.balance;
     }
 
-    async requestPayment(recipientAddr, amount, tokenMint = 'SOL', memo = '') {
+    async transferSOL(recipient, amount, memo = '') {
         return this._request('SOLANA_PAYMENT_REQUEST', { 
-            recipient: recipientAddr, 
-            amount: amount,
-            tokenMint: tokenMint,
-            memo: memo
+            recipient, 
+            amount,
+            tokenMint: 'SOL',
+            memo
         });
     }
 
-    async mintNFT(name, symbol, uri) {
-        return this._request('SOLANA_MINT_NFT', { name, symbol, uri });
+    async transferToken(recipient, amount, tokenMint, memo = '') {
+        return this._request('SOLANA_PAYMENT_REQUEST', { 
+            recipient, 
+            amount,
+            tokenMint,
+            memo
+        });
+    }
+
+    async createToken(config) {
+        const { name, symbol, decimals = 9, supply = 0, uri } = config;
+
+        if (!uri) {
+            throw new Error('URI is required. Upload your metadata.json first.');
+        }
+
+        return this._request('SOLANA_CREATE_TOKEN', { 
+            name,
+            symbol,
+            decimals,
+            supply,
+            uri
+        });
+    }
+
+    async createNFT(config) {
+        const { name, symbol, uri } = config;
+
+        if (!uri) {
+            throw new Error('URI is required. Upload your metadata.json first.');
+        }
+
+        return this._request('SOLANA_MINT_NFT', { 
+            name,
+            symbol,
+            uri
+        });
     }
 
     async signMessage(message) {
         return this._request('SOLANA_SIGN_MESSAGE', { message });
     }
 
-    async executeSmartContract({ programId, instruction, accounts, data, description }) {
-        return this._request('SOLANA_EXECUTE_CONTRACT', { 
-            programId, 
-            instruction, 
-            accounts, 
-            data,
-            description
+    async executeSmartContract(params) {
+        return this._request('SOLANA_EXECUTE_CONTRACT', params);
+    }
+
+    async requestPayment(recipient, amount, tokenMint = 'SOL', memo = '') {
+        return this._request('SOLANA_PAYMENT_REQUEST', { 
+            recipient, 
+            amount,
+            tokenMint,
+            memo
         });
     }
 
-    async sendTransaction(transaction) {
-        return this._request('SOLANA_SEND_TRANSACTION', { transaction });
+    async mintNFT(name, symbol, uri) {
+        return this._request('SOLANA_MINT_NFT', { name, symbol, uri });
     }
 
     hasPermission(permission) {
@@ -237,7 +276,7 @@ class NajiSDK {
     isMobile() {
         return this.platform === 'ios' || this.platform === 'android';
     }
-    
+
     isIOS() {
         return this.platform === 'ios';
     }
@@ -261,7 +300,7 @@ class NajiSDK {
     }
 
     getVersion() {
-        return '2.0.0';
+        return '2.1.0';
     }
 
     debug() {
@@ -278,10 +317,30 @@ class NajiSDK {
     }
 }
 
+window.formatSolanaAddress = function(address, start = 4, end = 4) {
+    if (!address) return '';
+    return `${address.slice(0, start)}...${address.slice(-end)}`;
+};
+
+window.solToLamports = function(sol) {
+    return sol * 1000000000; 
+
+};
+
+window.lamportsToSol = function(lamports) {
+    return lamports / 1000000000;
+};
+
+window.isValidSolanaAddress = function(address) {
+    if (!address || typeof address !== 'string') return false;
+    if (address.length < 32 || address.length > 44) return false;
+    return /^[1-9A-HJ-NP-Za-km-z]+$/.test(address);
+};
+
 window.NajiApp = new NajiSDK();
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = NajiSDK;
 }
 
-console.log('📱 Naji Mini App SDK v2.0 loaded');
+console.log('📱 Naji Mini App SDK v2.1 loaded');
