@@ -71,6 +71,23 @@ class NajiSDK {
                     });
                 }
                 break;
+
+            case 'NAJI_WALLET_UPDATE':
+                // Update wallet state when parent sends wallet update
+                this.wallet = data.wallet;
+                console.log('💼 Wallet state updated:', this.wallet?.connected ? 'Connected' : 'Disconnected');
+                
+                // Trigger wallet change event if listeners are registered
+                if (this.eventListeners['walletChanged']) {
+                    this.eventListeners['walletChanged'].forEach(cb => {
+                        try {
+                            cb(this.wallet);
+                        } catch (error) {
+                            console.error('Wallet change event handler error:', error);
+                        }
+                    });
+                }
+                break;
         }
     }
 
@@ -178,6 +195,11 @@ class NajiSDK {
         return this.wallet?.connected || false;
     }
 
+    refreshWalletState() {
+        // Request current wallet state from parent
+        this._postMessage('NAJI_WALLET_STATE_REQUEST');
+    }
+
     async getSolanaAddress() {
         return this._request('GET_SOLANA_ADDRESS');
     }
@@ -193,6 +215,9 @@ class NajiSDK {
     }
 
     async transferSOL(recipient, amount, memo = '') {
+        if (!this.isWalletConnected()) {
+            throw new Error('Wallet not connected. Please connect your wallet first.');
+        }
         return this._request('SOLANA_PAYMENT_REQUEST', { 
             recipient, 
             amount,
@@ -202,6 +227,9 @@ class NajiSDK {
     }
 
     async transferToken(recipient, amount, tokenMint, memo = '') {
+        if (!this.isWalletConnected()) {
+            throw new Error('Wallet not connected. Please connect your wallet first.');
+        }
         return this._request('SOLANA_PAYMENT_REQUEST', { 
             recipient, 
             amount,
@@ -211,6 +239,10 @@ class NajiSDK {
     }
 
     async createToken(config) {
+        if (!this.isWalletConnected()) {
+            throw new Error('Wallet not connected. Please connect your wallet first.');
+        }
+        
         const { decimals = 9, supply, uri } = config;
 
         if (!uri) {
@@ -229,6 +261,10 @@ class NajiSDK {
     }
 
     async createNFT(config) {
+        if (!this.isWalletConnected()) {
+            throw new Error('Wallet not connected. Please connect your wallet first.');
+        }
+        
         const { uri } = config;
 
         if (!uri) {
@@ -267,6 +303,20 @@ class NajiSDK {
 
     onPermissionChange(callback) {
         this.eventListeners['permissionChanged'].push(callback);
+    }
+
+    onWalletChange(callback) {
+        if (!this.eventListeners['walletChanged']) {
+            this.eventListeners['walletChanged'] = [];
+        }
+        this.eventListeners['walletChanged'].push(callback);
+    }
+
+    offWalletChange(callback) {
+        if (this.eventListeners['walletChanged']) {
+            this.eventListeners['walletChanged'] = 
+                this.eventListeners['walletChanged'].filter(cb => cb !== callback);
+        }
     }
 
     getPlatform() {
